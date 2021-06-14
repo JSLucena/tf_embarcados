@@ -1,4 +1,5 @@
-#include <hf-risc.h>
+#include <hellfire.h>
+#include <noc.h>
 #include <math.h>
 
 #define N_PATTERNS		16
