@@ -279,4 +279,6 @@ void app_main(void)
 {
 	if(hf_cpuid() == 0)
 		hf_spawn(_main,0,0,0,"_main",4096);
+	else
+		panic(0);
 }
