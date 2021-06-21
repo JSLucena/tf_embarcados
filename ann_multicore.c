@@ -1,6 +1,6 @@
 #include <hellfire.h>
 #include <noc.h>
-#include <math.h>
+
 
 #define N_PATTERNS		16
 #define INPUT_NEURONS		7
@@ -352,8 +352,8 @@ void master(void)
 		panic(0xff);
 	
 	struct neural_net_s net;
-	int i, p;
-	char buf[512];
+	int i, p, j;
+	char buf[1024];
 	uint16_t cpu, port, size;
 	int32_t chan;
 	int epoch;
@@ -369,12 +369,44 @@ void master(void)
 	message_p = (struct message_output_t*)&buf[0];
 	
 	load(&net);
-	init_weights(&net);
+	//init_weights(&net);
+	
+	
+	float rnd;
+	// init hidden_weights
+	for (i = 0; i < HIDDEN_NEURONS; i++) {
+		for (j = 0; j <= INPUT_NEURONS; j++) {
+			rnd = (random() % 100) / 100.0;
+			net.weights.hidden_weights[j * HIDDEN_NEURONS + i] = 2.0 * (rnd - 0.5) * INITIAL_WEIGHT_MAX;
+		}
+	}
+
+	// init output_weights
+	for (i = 0; i < OUTPUT_NEURONS; i++) {
+		for (j = 0; j <= HIDDEN_NEURONS; j++) {
+			rnd = (random() % 100) / 100.0;
+			net.weights.output_weights[j * OUTPUT_NEURONS + i] = 2.0 * (rnd - 0.5) * INITIAL_WEIGHT_MAX;
+		}
+	}
+
+	for (i = 0; i < HIDDEN_NEURONS; i++) {
+		for (j = 0; j <= INPUT_NEURONS; j++) {
+			printf("%.5f ", net.weights.output_weights[j * HIDDEN_NEURONS + i]);
+		}
+	}
+	printf("%\n");
+	for (i = 0; i < OUTPUT_NEURONS; i++) {
+		for (j = 0; j <= HIDDEN_NEURONS; j++) {
+			printf("%.5f ", net.weights.output_weights[j * OUTPUT_NEURONS + i]);
+		}
+	}
+	printf("%\n");
 	
 	printf("\ninitial outputs (not trained):");
 	show_training(&net);
 	
 	// send initial weights to slaves
+	/*
 	for(i = 0; i < hf_ncores(); i++)
 	{
 		if(i != MASTER_CORE)
@@ -385,6 +417,13 @@ void master(void)
 			hf_send(i, 1000 + i, buf, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS)*sizeof(float), MASTER_CORE);
 		}
 	}
+	*/
+	memcpy(message_p->hidden_weights, net.weights.hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float));
+	//hf_send(1, 1001, buf, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float), MASTER_CORE);
+	memcpy(message_p->output_weights, net.weights.output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS)*sizeof(float));
+	hf_send(1, 1001, buf, (sizeof(struct message_output_t)), MASTER_CORE);
+	
+	
 	
 	p = 0;
 	epoch = 1;
@@ -415,9 +454,11 @@ void master(void)
 			for(i = 0; i < (HIDDEN_NEURONS+1) * OUTPUT_NEURONS; i++)
 				accumulator->output_weights[i] += message_p->output_weights[i];
 			accumulator->error += message_p->error;
+			
+			
 			proccount++;
 			
-			
+			panic(0);
 			
 			if(proccount >= hf_ncores() -1)
 			{
@@ -451,7 +492,7 @@ void slave(void)
 	struct neural_net_s *net;
 	int i, j, p, q, r;
 	int rnd_index[N_PATTERNS];
-	char buf[512];
+	char buf[1024];
 	
 	
 	float rnd, error, acc;
@@ -471,6 +512,12 @@ void slave(void)
 	
 	load(&net);
 	
+	hf_recv(&cpu, &port, buf, &size, MASTER_CORE);
+	memcpy(net->weights.hidden_weights, message_p->hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS*sizeof(float)));
+	memcpy(net->weights.output_weights, message_p->output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS*sizeof(float)));
+	printf("Received initial weights from master...\n");
+	
+	
 	// init diff_hidden_weights
 	for (i = 0; i < HIDDEN_NEURONS; i++) {
 		for (j = 0; j <= INPUT_NEURONS; j++) {
@@ -486,13 +533,18 @@ void slave(void)
 	}	
 	
 	// receive initial hidden weights
-	hf_recv(&cpu, &port, buf, &size, MASTER_CORE);
-	memcpy(net->weights.hidden_weights, buf, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float));
-	printf("Received hidden from master...\n");	
+	//hf_recv(&cpu, &port, buf, &size, MASTER_CORE);
+	//memcpy(net->weights.hidden_weights, buf, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*4);
+	//printf("Received hidden from master...\n");	
 	// reveive initial outputs weights
-	hf_recv(&cpu, &port, buf, &size, MASTER_CORE);
-	memcpy(net->weights.output_weights, buf, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS)*sizeof(float));
-	printf("Received initial outputs from master...\n");
+	
+	
+	for(i = 0; i < (INPUT_NEURONS+1) * HIDDEN_NEURONS; i++)
+		printf("%.5f ", net->weights.hidden_weights[i]);
+	printf("%\n");
+	for(i = 0; i < (HIDDEN_NEURONS+1) * OUTPUT_NEURONS; i++)
+		printf("%.5f ", net->weights.output_weights[i]);
+	printf("%\n");
 	
 	
 	for (p = 0; p < N_PATTERNS; p++)
@@ -572,6 +624,15 @@ void slave(void)
 		}
 
 		// update network model weights (hidden to output)
+		
+		for(i = 0; i < (INPUT_NEURONS+1) * HIDDEN_NEURONS; i++)
+			printf("%.5f ", net->weights.hidden_weights[i]);
+		printf("%\n");
+		for(i = 0; i < (HIDDEN_NEURONS+1) * OUTPUT_NEURONS; i++)
+			printf("%.5f ", net->weights.output_weights[i]);
+		printf("%\n");
+		
+		
 		for (i = 0; i < OUTPUT_NEURONS; i++) {
 			net->weights.output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i] = net_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
 			net->weights.diff_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i] = diff_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
@@ -581,12 +642,13 @@ void slave(void)
 			}
 		}
 		printf("Before final memcpy\n");
-		memcpy(message_p->hidden_weights, net->weights.hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float));
-		memcpy(message_p->output_weights, net->weights.output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS)*sizeof(float));
+		//memcpy(message_p->hidden_weights, net->weights.hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float));
+		//memcpy(message_p->output_weights, net->weights.output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS)*sizeof(float));
 		printf("After final memcpy\n");
 		message_p->error=error;	
 		hf_send(MASTER_CORE, 1000+MASTER_CORE, buf, sizeof(struct message_output_t), hf_cpuid());
 		printf("Slave sending weights\n");
+		
 		
 	}
 }
@@ -603,9 +665,20 @@ void app_main(void)
 			hf_spawn(master,0,0,0,"master",8192);
 			break;
 		}
+		/*
 		else {
 			hf_spawn(slave,0,0,0,"slave",8192);
 			break;
+		}
+		*/
+		else if(hf_cpuid() == 1)
+		{
+			hf_spawn(slave,0,0,0,"slave",8192);
+			break;
+		}
+		else
+		{
+			panic(0);
 		}
 	}
 }
