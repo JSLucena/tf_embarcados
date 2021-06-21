@@ -39,7 +39,7 @@ float sigmoid(float val)
 void load(struct neural_net_s *net)
 {
 	int i, j;
-char input[N_PATTERNS * INPUT_NEURONS] = {
+	char input[N_PATTERNS * INPUT_NEURONS] = {
 		1, 1, 1, 1, 1, 1, 0,	// 0
 		0, 1, 1, 0, 0, 0, 0,	// 1
 		1, 1, 0, 1, 1, 0, 1,	// 2
@@ -164,6 +164,7 @@ struct message_output_t
 	float output_weights[(HIDDEN_NEURONS+1) * OUTPUT_NEURONS];
 	float error;
 };
+
 void train(struct neural_net_s *net)
 {
 	int i, j, p, q, r;
@@ -344,6 +345,7 @@ void _main(void)
 
 	while(1);
 }
+
 void master(void)
 {
 	if (hf_comm_create(hf_selfid(), 1000 + MASTER_CORE, 0))
@@ -351,7 +353,7 @@ void master(void)
 	
 	struct neural_net_s net;
 	int i, p;
-	char buf[300];
+	char buf[512];
 	uint16_t cpu, port, size;
 	int32_t chan;
 	int epoch;
@@ -394,6 +396,7 @@ void master(void)
 		if(chan >= 0)
 		{	
 			hf_recv(&cpu, &port, buf, &size, chan);
+			printf("Received from slave %d\n", cpu);
 			
 			// send and recv hidden weights
 			/*
@@ -420,7 +423,7 @@ void master(void)
 			{
 				proccount = 0;
 				memcpy(buf, accumulator, (sizeof(struct message_output_t)));
-				for(i = 1; i <= hf_ncores();i++)
+				for(i = 1; i < hf_ncores();i++)
 				{
 					printf("Sending to proc %d\n ", i);
 					hf_send(i, 1000 + i, buf, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float), MASTER_CORE);
@@ -448,7 +451,7 @@ void slave(void)
 	struct neural_net_s *net;
 	int i, j, p, q, r;
 	int rnd_index[N_PATTERNS];
-	char buf[300];
+	char buf[512];
 	
 	
 	float rnd, error, acc;
@@ -485,9 +488,11 @@ void slave(void)
 	// receive initial hidden weights
 	hf_recv(&cpu, &port, buf, &size, MASTER_CORE);
 	memcpy(net->weights.hidden_weights, buf, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float));
+	printf("Received hidden from master...\n");	
 	// reveive initial outputs weights
 	hf_recv(&cpu, &port, buf, &size, MASTER_CORE);
 	memcpy(net->weights.output_weights, buf, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS)*sizeof(float));
+	printf("Received initial outputs from master...\n");
 	
 	
 	for (p = 0; p < N_PATTERNS; p++)
@@ -575,10 +580,13 @@ void slave(void)
 				net->weights.diff_output_weights[j * OUTPUT_NEURONS + i] = diff_output_weights[j * OUTPUT_NEURONS + i];
 			}
 		}
+		printf("Before final memcpy\n");
 		memcpy(message_p->hidden_weights, net->weights.hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float));
 		memcpy(message_p->output_weights, net->weights.output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS)*sizeof(float));
-		message_p->error=error;
+		printf("After final memcpy\n");
+		message_p->error=error;	
 		hf_send(MASTER_CORE, 1000+MASTER_CORE, buf, sizeof(struct message_output_t), hf_cpuid());
+		printf("Slave sending weights\n");
 		
 	}
 }
@@ -592,11 +600,11 @@ void app_main(void)
 	for(i = 0; i < hf_ncores(); i++)
 	{
 		if(hf_cpuid() == MASTER_CORE) {
-			hf_spawn(master,0,0,0,"master",4096);
+			hf_spawn(master,0,0,0,"master",8192);
 			break;
 		}
 		else {
-			hf_spawn(slave,0,0,0,"slave",4096);
+			hf_spawn(slave,0,0,0,"slave",8192);
 			break;
 		}
 	}
