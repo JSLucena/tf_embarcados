@@ -489,7 +489,7 @@ void slave(void)
 	if (hf_comm_create(hf_selfid(), 1000 + hf_cpuid(), 0))
 		panic(0xff);
 		
-	struct neural_net_s *net;
+	struct neural_net_s net;
 	int i, j, p, q, r;
 	int rnd_index[N_PATTERNS];
 	char buf[1024];
@@ -513,8 +513,8 @@ void slave(void)
 	load(&net);
 	
 	hf_recv(&cpu, &port, buf, &size, MASTER_CORE);
-	memcpy(net->weights.hidden_weights, message_p->hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS*sizeof(float)));
-	memcpy(net->weights.output_weights, message_p->output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS*sizeof(float)));
+	memcpy(net.weights.hidden_weights, message_p->hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS*sizeof(float)));
+	memcpy(net.weights.output_weights, message_p->output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS*sizeof(float)));
 	printf("Received initial weights from master...\n");
 	
 	
@@ -540,10 +540,10 @@ void slave(void)
 	
 	
 	for(i = 0; i < (INPUT_NEURONS+1) * HIDDEN_NEURONS; i++)
-		printf("%.5f ", net->weights.hidden_weights[i]);
+		printf("%.5f ", net.weights.hidden_weights[i]);
 	printf("%\n");
 	for(i = 0; i < (HIDDEN_NEURONS+1) * OUTPUT_NEURONS; i++)
-		printf("%.5f ", net->weights.output_weights[i]);
+		printf("%.5f ", net.weights.output_weights[i]);
 	printf("%\n");
 	
 	
@@ -568,28 +568,28 @@ void slave(void)
 
 			// feedforward: compute hidden layer activations
 			for (i = 0; i < HIDDEN_NEURONS; i++) {
-				acc = net->weights.hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i];
+				acc = net.weights.hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i];
 				for (j = 0; j < INPUT_NEURONS; j++)
-					acc += net->input[p * INPUT_NEURONS + j] * net->weights.hidden_weights[j * HIDDEN_NEURONS + i];
-				net->hidden[i] = sigmoid(acc);
+					acc += net.input[p * INPUT_NEURONS + j] * net.weights.hidden_weights[j * HIDDEN_NEURONS + i];
+				net.hidden[i] = sigmoid(acc);
 			}
 
 			// feedforward: compute output layer activation errors
 			for (i = 0; i < OUTPUT_NEURONS; i++) {
-				acc = net->weights.output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
+				acc = net.weights.output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
 				for (j = 0; j < HIDDEN_NEURONS; j++)
-					acc += net->hidden[j] * net->weights.output_weights[j * OUTPUT_NEURONS + i];
-				net->output[i] = sigmoid(acc);
-				output_delta[i] = (net->target[p * OUTPUT_NEURONS + i] - net->output[i]) * net->output[i] * (1.0 - net->output[i]);
-				error += 0.5 * (net->target[p * OUTPUT_NEURONS + i] - net->output[i]) * (net->target[p * OUTPUT_NEURONS + i] - net->output[i]);
+					acc += net.hidden[j] * net.weights.output_weights[j * OUTPUT_NEURONS + i];
+				net.output[i] = sigmoid(acc);
+				output_delta[i] = (net.target[p * OUTPUT_NEURONS + i] - net.output[i]) * net.output[i] * (1.0 - net.output[i]);
+				error += 0.5 * (net.target[p * OUTPUT_NEURONS + i] - net.output[i]) * (net.target[p * OUTPUT_NEURONS + i] - net.output[i]);
 			}
 
 			// backpropagation of errors to hidden layer
 			for (i = 0; i < HIDDEN_NEURONS; i++) {
 				acc = 0.0;
 				for (j = 0; j < OUTPUT_NEURONS; j++)
-					acc += net->weights.output_weights[i * OUTPUT_NEURONS + j] * output_delta[j];
-				hidden_delta[i] = acc * net->hidden[i] * (1.0 - net->hidden[i]);
+					acc += net.weights.output_weights[i * OUTPUT_NEURONS + j] * output_delta[j];
+				hidden_delta[i] = acc * net.hidden[i] * (1.0 - net.hidden[i]);
 			}
 
 			// update weights (input to hidden)
@@ -597,7 +597,7 @@ void slave(void)
 				diff_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i] = ETA * hidden_delta[i] + ALPHA * diff_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i];
 				net_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i] += diff_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i];
 				for (j = 0; j < INPUT_NEURONS; j++) {
-					diff_hidden_weights[j * HIDDEN_NEURONS + i] = ETA * net->input[p * INPUT_NEURONS + j] * hidden_delta[i] + ALPHA * diff_hidden_weights[j * HIDDEN_NEURONS + i];
+					diff_hidden_weights[j * HIDDEN_NEURONS + i] = ETA * net.input[p * INPUT_NEURONS + j] * hidden_delta[i] + ALPHA * diff_hidden_weights[j * HIDDEN_NEURONS + i];
 					net_hidden_weights[j * HIDDEN_NEURONS + i] += diff_hidden_weights[j * HIDDEN_NEURONS + i] ;
 				}
 			}
@@ -607,7 +607,7 @@ void slave(void)
 				diff_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i] = ETA * output_delta[i] + ALPHA * diff_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
 				net_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i] += diff_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
 				for (j = 0; j < HIDDEN_NEURONS; j++) {
-					diff_output_weights[j * OUTPUT_NEURONS + i] = ETA * net->hidden[j] * output_delta[i] + ALPHA * diff_output_weights[j * OUTPUT_NEURONS + i];
+					diff_output_weights[j * OUTPUT_NEURONS + i] = ETA * net.hidden[j] * output_delta[i] + ALPHA * diff_output_weights[j * OUTPUT_NEURONS + i];
 					net_output_weights[j * OUTPUT_NEURONS + i] += diff_output_weights[j * OUTPUT_NEURONS + i];
 				}
 			}
@@ -615,35 +615,35 @@ void slave(void)
 		
 		// update network model weights (input to hidden)
 		for (i = 0; i < HIDDEN_NEURONS; i++) {
-			net->weights.hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i] = net_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i];
-			net->weights.diff_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i] = diff_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i];
+			net.weights.hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i] = net_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i];
+			net.weights.diff_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i] = diff_hidden_weights[INPUT_NEURONS * HIDDEN_NEURONS + i];
 			for (j = 0; j < INPUT_NEURONS; j++) {
-				net->weights.hidden_weights[j * HIDDEN_NEURONS + i] = net_hidden_weights[j * HIDDEN_NEURONS + i] ;
-				net->weights.diff_hidden_weights[j * HIDDEN_NEURONS + i] = diff_hidden_weights[j * HIDDEN_NEURONS + i] ;
+				net.weights.hidden_weights[j * HIDDEN_NEURONS + i] = net_hidden_weights[j * HIDDEN_NEURONS + i] ;
+				net.weights.diff_hidden_weights[j * HIDDEN_NEURONS + i] = diff_hidden_weights[j * HIDDEN_NEURONS + i] ;
 			}
 		}
 
 		// update network model weights (hidden to output)
 		
 		for(i = 0; i < (INPUT_NEURONS+1) * HIDDEN_NEURONS; i++)
-			printf("%.5f ", net->weights.hidden_weights[i]);
+			printf("%.5f ", net.weights.hidden_weights[i]);
 		printf("%\n");
 		for(i = 0; i < (HIDDEN_NEURONS+1) * OUTPUT_NEURONS; i++)
-			printf("%.5f ", net->weights.output_weights[i]);
+			printf("%.5f ", net.weights.output_weights[i]);
 		printf("%\n");
 		
 		
 		for (i = 0; i < OUTPUT_NEURONS; i++) {
-			net->weights.output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i] = net_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
-			net->weights.diff_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i] = diff_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
+			net.weights.output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i] = net_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
+			net.weights.diff_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i] = diff_output_weights[HIDDEN_NEURONS * OUTPUT_NEURONS + i];
 			for (j = 0; j < HIDDEN_NEURONS; j++) {
-				net->weights.output_weights[j * OUTPUT_NEURONS + i] = net_output_weights[j * OUTPUT_NEURONS + i];
-				net->weights.diff_output_weights[j * OUTPUT_NEURONS + i] = diff_output_weights[j * OUTPUT_NEURONS + i];
+				net.weights.output_weights[j * OUTPUT_NEURONS + i] = net_output_weights[j * OUTPUT_NEURONS + i];
+				net.weights.diff_output_weights[j * OUTPUT_NEURONS + i] = diff_output_weights[j * OUTPUT_NEURONS + i];
 			}
 		}
 		printf("Before final memcpy\n");
-		//memcpy(message_p->hidden_weights, net->weights.hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float));
-		//memcpy(message_p->output_weights, net->weights.output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS)*sizeof(float));
+		memcpy(message_p->hidden_weights, net.weights.hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS)*sizeof(float));
+		memcpy(message_p->output_weights, net.weights.output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS)*sizeof(float));
 		printf("After final memcpy\n");
 		message_p->error=error;	
 		hf_send(MASTER_CORE, 1000+MASTER_CORE, buf, sizeof(struct message_output_t), hf_cpuid());
