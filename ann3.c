@@ -272,13 +272,15 @@ void _main(void)
 	load(&neural_network, input, target);
 	train(&neural_network);
 	show_training(&neural_network);
+	
+	panic(0);
 
 	while(1);
 }
 void app_main(void)
 {
 	if(hf_cpuid() == 0)
-		hf_spawn(_main,0,0,0,"_main",4096);
+		hf_spawn(_main,0,0,0,"_main",8192);
 	else
 		panic(0);
 }
