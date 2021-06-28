@@ -15,7 +15,7 @@
 
 #define MASTER_CORE 0
 
-#define DEBUG 1
+#define DEBUG 0
 
 
 struct neural_net_weights_s {
@@ -463,25 +463,8 @@ void master(void)
 				
 			}
 			* */
-			/*
-			memcpy(net.weights.hidden_weights, message_p->hidden_weights, ((INPUT_NEURONS+1) * HIDDEN_NEURONS*sizeof(float)));
-			memcpy(net.weights.output_weights, message_p->output_weights, ((HIDDEN_NEURONS+1) * OUTPUT_NEURONS*sizeof(float)));
-			for (i = 0; i < HIDDEN_NEURONS; i++) {
-					for (j = 0; j <= INPUT_NEURONS; j++) {
-						
-						ftoa(net.weights.hidden_weights[j * HIDDEN_NEURONS + i],tmp,6);
-						printf("%s ", tmp);
-					}
-				}
-				printf("\nSize: %d\n", size);
-				for (i = 0; i < OUTPUT_NEURONS; i++) {
-					for (j = 0; j <= HIDDEN_NEURONS; j++) {
-						ftoa(net.weights.output_weights[j * HIDDEN_NEURONS + i],tmp,6);
-						printf("%s ", tmp);
-					}
-				}
-				printf("\n\n\n");
-				* */
+			
+				
 			
 			
 			
@@ -583,6 +566,7 @@ void master(void)
 				printf("\n\n\n");
 				#endif
 				
+				epoch++;
 					
 			}		
 			if ((epoch % STATUS_CYCLES) == 0) {
@@ -595,6 +579,11 @@ void master(void)
 	//	panic(0);
 			
 		}
+		
+		ftoa(error, buf, 6);
+		printf("\n\ntraining set solved, %d epochs (error: %s)\n", epoch, buf);
+		show_training(&net);
+		
 		while(1);
 }
 	
